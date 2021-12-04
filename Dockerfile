@@ -42,12 +42,16 @@ RUN     cd ${HOME}/libfastcommon-master/ \
 RUN     cd ${HOME}/fastdfs-master/ \
         && ./make.sh \
         && ./make.sh install
+RUN     test ! -f /etc/init.d/fdfs_storaged && cp ${HOME}/fastdfs-master/init.d/fdfs_storaged /etc/init.d/fdfs_storaged && chmod u+x /etc/init.d/fdfs_storaged || :
+RUN     test ! -f /etc/init.d/fdfs_trackerd && cp ${HOME}/fastdfs-master/init.d/fdfs_trackerd /etc/init.d/fdfs_trackerd && chmod u+x /etc/init.d/fdfs_trackerd || :
 
 # 安装berkeley db
-WORKDIR ${HOME}/db-18.1.32/build_unix
-RUN     ../dist/configure -prefix=/usr \
+RUN     cd ${HOME}/db-18.1.32/build_unix \
+        && ../dist/configure -prefix=/usr \
         && make \
         && make install
+RUN     cp /usr/lib/libdb-18.so /usr/lib64/libdb-18.so \
+        && cp /usr/lib/libdb-18.1.so /usr/lib64/libdb-18.1.so
 
 # 安装fastdht
 RUN     cd ${HOME}/fastdht-master/ \
@@ -57,9 +61,6 @@ RUN     cd ${HOME}/fastdht-master/ \
 
 # 配置fastdfs: base_dir
 RUN     cd /etc/fdfs/ \
-        && cp storage.conf.sample storage.conf \
-        && cp tracker.conf.sample tracker.conf \
-        && cp client.conf.sample client.conf \
         && sed -i "s|/home/yuqing/fastdfs|/var/local/fdfs/tracker|g" /etc/fdfs/tracker.conf \
         && sed -i "s|/home/yuqing/fastdfs|/var/local/fdfs/storage|g" /etc/fdfs/storage.conf \
         && sed -i "s|/home/yuqing/fastdfs|/var/local/fdfs/storage|g" /etc/fdfs/client.conf \
@@ -124,13 +125,13 @@ ENV STORAGE_PORT 23000
 ENV FDHT_PORT 11411
 # 创建启动脚本
 RUN echo -e "\
-sed -i \"s/http.anti_steal.check_token=.*$/http.anti_steal.check_token=\$CHECK_TOKEN/g\" /etc/fdfs/http.conf; \n\
-sed -i \"s/http.anti_steal.token_ttl=.*$/http.anti_steal.token_ttl=\$TOKEN_TTL/g\" /etc/fdfs/http.conf; \n\
-sed -i \"s/http.anti_steal.secret_key=.*$/http.anti_steal.secret_key=\$SECRET_KEY/g\" /etc/fdfs/http.conf; \n\
+sed -i \"s/http.anti_steal.check_token\ *=\ *.*$/http.anti_steal.check_token=\$CHECK_TOKEN/g\" /etc/fdfs/http.conf; \n\
+sed -i \"s/http.anti_steal.token_ttl\ *=\ *.*$/http.anti_steal.token_ttl=\$TOKEN_TTL/g\" /etc/fdfs/http.conf; \n\
+sed -i \"s/http.anti_steal.secret_key\ *=\ *.*$/http.anti_steal.secret_key=\$SECRET_KEY/g\" /etc/fdfs/http.conf; \n\
 sed -i \"s|/home/yuqing/fastdfs/conf/anti-steal.jpg|\$TOKEN_CHECK_FAIL|g\" /etc/fdfs/http.conf; \n\
 mkdir -p /var/local/fdfs/storage/data /var/local/fdfs/tracker /var/local/fdht; \n\
 sed -i \"s/listen\ .*$/listen\ \$WEB_PORT;/g\" /usr/local/nginx/conf/nginx.conf; \n\
-sed -i \"s/http.server_port=.*$/http.server_port=\$WEB_PORT/g\" /etc/fdfs/storage.conf; \n\
+sed -i \"s/http.server_port\ *=\ *.*$/http.server_port=\$WEB_PORT/g\" /etc/fdfs/storage.conf; \n\
 if [ \"\$IP\" = \"\" ]; then \n\
     IP=\`ifconfig eth0 | grep inet | awk '{print \$2}'| awk -F: '{print \$2}'\`; \n\
 fi \n\
@@ -141,21 +142,21 @@ for ((i=0; i<\${#IP[*]}; i++)) \n\
   do \n\
     sed -i '\$a\group'\${i}'='\${IP[i]}':'\$FDHT_PORT'' /etc/fdht/fdht_servers.conf; \n\
   done \n\
-sed -i \"s/^tracker_server=.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/client.conf; \n\
-sed -i \"s/^tracker_server=.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/storage.conf; \n\
-sed -i \"s/^tracker_server=.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/mod_fastdfs.conf; \n\
+sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/client.conf; \n\
+sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/storage.conf; \n\
+sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/mod_fastdfs.conf; \n\
 for ((i=1; i<\${#IP[*]}; i++)) \n\
   do \n\
     sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server=\${IP[i]}:\$FDFS_PORT\" /etc/fdfs/client.conf; \n\
     sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server=\${IP[i]}:\$FDFS_PORT\" /etc/fdfs/storage.conf; \n\
     sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server=\${IP[i]}:\$FDFS_PORT\" /etc/fdfs/mod_fastdfs.conf; \n\
   done \n\
-sed -i \"s/^port=.*$/port=\$FDFS_PORT/\" /etc/fdfs/tracker.conf; \n\
-sed -i \"s/^port=.*$/port=\$STORAGE_PORT/g\" /etc/fdfs/storage.conf; \n\
-sed -i \"s/^storage_server_port=.*$/storage_server_port=\$STORAGE_PORT/g\" /etc/fdfs/mod_fastdfs.conf; \n\
-sed -i \"s/^port=.*$/port=\$FDHT_PORT/g\" /etc/fdht/fdhtd.conf; \n\
-sed -i \"s/^check_file_duplicate=.*$/check_file_duplicate=1/g\" /etc/fdfs/storage.conf; \n\
-sed -i \"s/^keep_alive=.*$/keep_alive=1/g\" /etc/fdfs/storage.conf; \n\
+sed -i \"s/^port\ *=\ *.*$/port=\$FDFS_PORT/\" /etc/fdfs/tracker.conf; \n\
+sed -i \"s/^port\ *=\ *.*$/port=\$STORAGE_PORT/g\" /etc/fdfs/storage.conf; \n\
+sed -i \"s/^storage_server_port\ *=\ *.*$/storage_server_port=\$STORAGE_PORT/g\" /etc/fdfs/mod_fastdfs.conf; \n\
+sed -i \"s/^port\ *=\ *.*$/port=\$FDHT_PORT/g\" /etc/fdht/fdhtd.conf; \n\
+sed -i \"s/^check_file_duplicate\ *=\ *.*$/check_file_duplicate=1/g\" /etc/fdfs/storage.conf; \n\
+sed -i \"s/^keep_alive\ *=\ *.*$/keep_alive=1/g\" /etc/fdfs/storage.conf; \n\
 sed -i \"s/^##include \/home\/yuqing\/fastdht\/conf\/fdht_servers.conf/#include \/etc\/fdht\/fdht_servers.conf/g\" /etc/fdfs/storage.conf; \n\
 /etc/init.d/fdfs_trackerd start; \n\
 /usr/local/bin/fdhtd /etc/fdht/fdhtd.conf; \n\
