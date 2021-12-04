@@ -71,7 +71,7 @@ RUN     cd /etc/fdfs/ \
 RUN     cd ${HOME} \
         && chmod u+x ${HOME}/fastdfs-nginx-module-master/src/config \
         && cd nginx-1.21.2 \
-        && ./configure --add-module=${HOME}/fastdfs-nginx-module-master/src \
+        && ./configure --prefix=/usr/local/nginx --with-http_stub_status_module --with-http_ssl_module --with-http_realip_module --with-http_image_filter_module --add-module=${HOME}/fastdfs-nginx-module-master/src \
         && make && make install
 
 # 设置nginx和fastdfs联合环境，并配置nginx
@@ -91,7 +91,21 @@ RUN     cp ${HOME}/fastdfs-nginx-module-master/src/mod_fastdfs.conf /etc/fdfs/ \
            server {\n\
                listen 80;\n\
                server_name localhost;\n\
-               location ~ /group[0-9]/M00 {\n\
+               location ~ /group([0-9])/M00/(.*)_([0-9]+)x([0-9]+)\.(jpg|gif|png) {\n\
+                 ngx_fastdfs_module;\n\
+                 set \$w \$3;\n\
+                 set \$h \$4;\n\
+                 if (\$w != \"0\") {\n\
+                   rewrite group([0-9])/M00(.+)_(\\d+)x(\\d+)\\.(jpg|gif|png)\$ group\$1/M00\$2.\$5 break;\n\
+                 }\n\
+                 if (\$h != \"0\") {\n\
+                   rewrite group([0-9])/M00(.+)_(\\d+)x(\\d+)\\.(jpg|gif|png)\$ group\$1/M00\$2.\$5 break;\n\
+                 }\n\
+                 image_filter crop \$w \$h;\n\
+                 image_filter_jpeg_quality 80;\n\
+                 image_filter_buffer 100M;\n\
+               }\n\
+               location ~ /group[0-9]/M00/(.+)\\.?(.+) {\n\
                  ngx_fastdfs_module;\n\
                }\n\
              }\n\
