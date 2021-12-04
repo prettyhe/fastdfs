@@ -1,11 +1,11 @@
-FROM centos:7
+# 使用超小的Linux镜像alpine
+FROM alpine:3.15
 
 ENV HOME /root
 
 # 安装准备
-RUN yum install git gcc gcc-c++ make automake autoconf libtool pcre pcre-devel zlib zlib-devel \
-    openssl-devel wget vim libdb libdb-devel libevent libevent-devel curl gnupg libxslt-devel \
-    gd-devel geoip-devel -y
+RUN    apk update \
+        && apk add --no-cache --virtual .build-deps bash gcc libc-dev make openssl-dev pcre-dev zlib-dev linux-headers curl gnupg libxslt-dev gd-dev geoip-dev git wget
 
 # 复制工具
 ADD soft ${HOME}
@@ -43,13 +43,13 @@ RUN     cd ${HOME}/fastdfs-master/ \
         && ./make.sh \
         && ./make.sh install
 
-# 安装berkeley db
+#安装berkeley db
 WORKDIR ${HOME}/db-18.1.32/build_unix
 RUN     ../dist/configure -prefix=/usr \
         && make \
         && make install
 
-# 安装fastdht
+#安装fastdht
 RUN     cd ${HOME}/fastdht-master/ \
         && sed -i "s?CFLAGS='-Wall -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE'?CFLAGS='-Wall -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I/usr/include/ -L/usr/lib/'?" make.sh \
         && ./make.sh \
@@ -98,9 +98,12 @@ RUN     cp ${HOME}/fastdfs-nginx-module-master/src/mod_fastdfs.conf /etc/fdfs/ \
 
 # 清理文件
 RUN rm -rf ${HOME}/*
+RUN apk del .build-deps gcc libc-dev make openssl-dev linux-headers curl gnupg libxslt-dev gd-dev geoip-dev
+RUN apk add bash pcre-dev zlib-dev
 
 # 设置时区
 ENV TZ Asia/Shanghai
+RUN apk add -U tzdata
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 防盗链参数配置
