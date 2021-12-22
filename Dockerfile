@@ -16,7 +16,8 @@ RUN cd ${HOME} \
     && tar xvf fastdfs-nginx-module-master.tar.gz \
     && tar xvf fastdht-master.tar.gz \
     && tar xvf nginx-1.21.2.tar.gz \
-    && tar xvf db-18.1.32.tar.gz
+    && tar xvf db-18.1.32.tar.gz \
+    && tar xvf pdfh5.tar.gz
 
 # 下载libfastcommon、fastdfs、fastdfs-nginx-module、fastdht、berkeley-db、nginx插件的源码
 #RUN     cd ${HOME} \
@@ -74,6 +75,10 @@ RUN     cd ${HOME} \
         && ./configure --prefix=/usr/local/nginx --with-http_stub_status_module --with-http_ssl_module --with-http_realip_module --with-http_image_filter_module --add-module=${HOME}/fastdfs-nginx-module-master/src \
         && make && make install
 
+# 添加pdfh5
+RUN     cd ${HOME} \
+        && mv pdfh5 /usr/local/nginx/
+
 # 设置nginx和fastdfs联合环境，并配置nginx
 RUN     cp ${HOME}/fastdfs-nginx-module-master/src/mod_fastdfs.conf /etc/fdfs/ \
         && sed -i "s|^store_path0.*$|store_path0=/var/local/fdfs/storage|g" /etc/fdfs/mod_fastdfs.conf \
@@ -107,6 +112,12 @@ RUN     cp ${HOME}/fastdfs-nginx-module-master/src/mod_fastdfs.conf /etc/fdfs/ \
                }\n\
                location ~ /group[0-9]/M00/(.+)\\.?(.+) {\n\
                  ngx_fastdfs_module;\n\
+               }\n\
+               location ~ .*\\.(css|js)\$ {\n\
+                 root /usr/local/nginx/pdfh5/;\n\
+               }\n\
+               location /pdf.html {\n\
+                 alias /usr/local/nginx/pdfh5/pdf.html;\n\
                }\n\
              }\n\
             }" >/usr/local/nginx/conf/nginx.conf
@@ -151,19 +162,19 @@ if [ \"\$IP\" = \"\" ]; then \n\
 fi \n\
 IP=(\${IP//,/ }); \n\
 sed -i '/^group/,\$d' /etc/fdht/fdht_servers.conf; \n\
-sed -i '\$a\group_count = '\${#IP[*]}'' /etc/fdht/fdht_servers.conf; \n\
+sed -i '\$a\group_count = '\${#IP[*]}'' /etc/fdht/fdht_servers.conf; \n \
 for ((i=0; i<\${#IP[*]}; i++)) \n\
   do \n\
     sed -i '\$a\group'\${i}'='\${IP[i]}':'\$FDHT_PORT'' /etc/fdht/fdht_servers.conf; \n\
   done \n\
-sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/client.conf; \n\
-sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/storage.conf; \n\
-sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server=\${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/mod_fastdfs.conf; \n\
+sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server = \${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/client.conf; \n\
+sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server = \${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/storage.conf; \n\
+sed -i \"s/^tracker_server\ *=\ *.*$/tracker_server = \${IP[0]}:\$FDFS_PORT/g\" /etc/fdfs/mod_fastdfs.conf; \n\
 for ((i=1; i<\${#IP[*]}; i++)) \n\
   do \n\
-    sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server=\${IP[i]}:\$FDFS_PORT\" /etc/fdfs/client.conf; \n\
-    sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server=\${IP[i]}:\$FDFS_PORT\" /etc/fdfs/storage.conf; \n\
-    sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server=\${IP[i]}:\$FDFS_PORT\" /etc/fdfs/mod_fastdfs.conf; \n\
+    sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server = \${IP[i]}:\$FDFS_PORT\" /etc/fdfs/client.conf; \n\
+    sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server = \${IP[i]}:\$FDFS_PORT\" /etc/fdfs/storage.conf; \n\
+    sed -i \"/tracker_server=\${IP[i-1]}:\$FDFS_PORT/atracker_server = \${IP[i]}:\$FDFS_PORT\" /etc/fdfs/mod_fastdfs.conf; \n\
   done \n\
 sed -i \"s/^port\ *=\ *.*$/port=\$FDFS_PORT/\" /etc/fdfs/tracker.conf; \n\
 sed -i \"s/^port\ *=\ *.*$/port=\$STORAGE_PORT/g\" /etc/fdfs/storage.conf; \n\
